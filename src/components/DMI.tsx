@@ -177,7 +177,7 @@ export const DMI: React.FC<DMIProps> = ({ train, maDist, maxMaDist }) => {
                         </text>
 
                         {/* DTG Vertical Bar */}
-                        <g transform="translate(15, 35)">
+                        <g transform="translate(-15, 35)">
                             <rect x="0" y="0" width="12" height="130" fill="#333" rx="3" />
                             <rect x="0" y={130 - (Math.min(maxMaDist, Math.max(0, maDist)) / maxMaDist) * 130} width="12" height={(Math.min(maxMaDist, Math.max(0, maDist)) / maxMaDist) * 130} fill="#2ecc71" rx="3" />
                             <text x="6" y="145" fill="#666" fontSize="8" textAnchor="middle" fontFamily="monospace">DTG</text>
