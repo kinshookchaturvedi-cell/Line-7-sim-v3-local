@@ -280,7 +280,24 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
                                 train.speed = 0;
                                 
                                 const chNode = simState.current.stations.find(c => c.c === train.nextStop || 71560 + (71560 - c.c) === train.nextStop);
-                                train.dwellTimer = chNode?.dwell || 30;
+                                let baseDwell = chNode?.dwell || 30;
+
+                                // --- ATR LOGIC: Dwell Adjustment ---
+                                const idealHeadway = LOOP_LENGTH / trains.length;
+                                const leading = getLeadingTrain(train);
+                                const actualHeadway = (leading.position - train.position + LOOP_LENGTH) % LOOP_LENGTH;
+
+                                // If bunching (too close to leader), increase dwell to wait
+                                if (actualHeadway < idealHeadway * 0.8) {
+                                    baseDwell = Math.min(baseDwell + 10, 60);
+                                } 
+                                // If gapping (too far from leader), reduce dwell to catch up
+                                else if (actualHeadway > idealHeadway * 1.2) {
+                                    baseDwell = Math.max(baseDwell - 10, 15);
+                                }
+
+                                train.dwellTimer = baseDwell;
+
 
                                 // TELEMETRY: Station Arrival Event
                                 stationArrivalsRef.current.push({
@@ -346,8 +363,18 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
                         
                         const serviceDecel = 1.0;
                         let advisoryLimit = Math.sqrt(2 * serviceDecel * Math.max(0, effectiveMaDist - margin));
-                        train.advisorySpeed = Math.min(advisoryLimit, train.targetSpeed);
-
+                        // --- ATR LOGIC: Speed Regulation ---
+                        const idealHeadway = LOOP_LENGTH / trains.length;
+                        const leading = getLeadingTrain(train);
+                        const actualHeadway = (leading.position - train.position + LOOP_LENGTH) % LOOP_LENGTH;
+                        
+                        // If delayed (wide gap to leader), use maximum available civil speed more aggressively
+                        if (actualHeadway > idealHeadway * 1.2 && train.speed < train.targetSpeed) {
+                            train.advisorySpeed = Math.min(train.targetSpeed, train.speed + 1.0); 
+                        } else {
+                            train.advisorySpeed = Math.max(0, Math.min(advisoryLimit, train.targetSpeed - 2)); 
+                        }
+                        
                         train.move(cycleTime, 0, LOOP_LENGTH);
                     });
 
