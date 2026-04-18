@@ -4,6 +4,10 @@ import type { LogEntry } from '../lib/exportReport';
 
 export const LOOP_LENGTH = 143120; // 71560 * 2 (DN and UP)
 
+export interface StationArrival { trainId: string; stationChainage: number; time: number; }
+export interface TripLog { trainId: string; startTime: number; endTime: number; duration: number; delay: number; }
+
+
 export const shortNames: Record<string, string> = {
     "Majlis Park": "MJP",
     "Azadpur": "AZP",
@@ -138,9 +142,6 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
     const logRef = useRef<LogEntry[]>([]);
     const lastLogClockRef = useRef<number>(6 * 3600);
     const LOG_INTERVAL_SEC = 30;
-
-    export interface StationArrival { trainId: string; stationChainage: number; time: number; }
-    export interface TripLog { trainId: string; startTime: number; endTime: number; duration: number; delay: number; }
 
     const stationArrivalsRef = useRef<StationArrival[]>([]);
     const tripTrackingRef = useRef<Record<string, { startTime: number, completedTrips: number }>>({});
