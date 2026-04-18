@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+:root {
+    --bg: #F5F5F5;
+    --sidebar-bg: #FFFFFF;
+    --ink: #1A1A1A;
+    --accent-green: #2ECC71;
+    --accent-red: #E74C3C;
+    --accent-blue: #3498DB;
+    --line: #E0E0E0;
+    --f-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    --f-mono: 'Courier New', Courier, monospace;
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Line 11 CBTC Simulator Version 3",
+  "description": "Communication-Based Train Control simulator with Zone Controller and ATP logic for DMRC Line 11 with multiple DMI displays",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
