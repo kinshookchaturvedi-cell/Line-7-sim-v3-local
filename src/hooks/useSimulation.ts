@@ -149,6 +149,8 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
     const stationArrivalsRef = useRef<StationArrival[]>([]);
     const tripTrackingRef = useRef<Record<string, { startTime: number, completedTrips: number }>>({});
     const completedTripsRef = useRef<TripLog[]>([]);
+    const atrSavingsRef = useRef<number>(0);
+    const failureHistoryRef = useRef<{ id: string, s: number, startTime: number, duration: number }[]>([]);
 
     const formatSimTime = (sec: number) => {
         const h = Math.floor(sec / 3600).toString().padStart(2, '0');
@@ -180,10 +182,17 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
     }, []);
 
     const addFailure = useCallback((s: number, durationMins: number) => {
+        const id = `F-${Math.floor(Math.random()*1000)}`;
         simState.current.failures.push({
-            id: `F-${Math.floor(Math.random()*1000)}`,
+            id: id,
             s: s,
             timer: durationMins * 60
+        });
+        failureHistoryRef.current.push({
+            id: id,
+            s: s,
+            startTime: simState.current.clockTime,
+            duration: durationMins * 60
         });
     }, []);
 
@@ -229,6 +238,8 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
         stationArrivalsRef.current = [];
         completedTripsRef.current = [];
         tripTrackingRef.current = {};
+        atrSavingsRef.current = 0;
+        failureHistoryRef.current = [];
 
         spawnTrainsBasedOnTimetable();
         setPaused(true);
@@ -293,6 +304,8 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
                                 } 
                                 // If gapping (too far from leader), reduce dwell to catch up
                                 else if (actualHeadway > idealHeadway * 1.2) {
+                                    const saved = baseDwell - Math.max(baseDwell - 10, 15);
+                                    atrSavingsRef.current += saved;
                                     baseDwell = Math.max(baseDwell - 10, 15);
                                 }
 
@@ -424,7 +437,9 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
     const getAnalytics = useCallback(() => ({
         stationArrivals: stationArrivalsRef.current,
         completedTrips: completedTripsRef.current,
-        totalTime: Math.max(0, simState.current.clockTime - (6 * 3600))
+        totalTime: Math.max(0, simState.current.clockTime - (6 * 3600)),
+        atrSecondsSaved: atrSavingsRef.current,
+        failureHistory: failureHistoryRef.current
     }), []);
 
     return { 
