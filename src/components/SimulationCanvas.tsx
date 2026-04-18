@@ -14,6 +14,7 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
     const [isSimulatingFailure, setIsSimulatingFailure] = useState(false);
     const [hoverData, setHoverData] = useState<{x: number, y: number, chainage: number, line: string, s: number} | null>(null);
     const [failureModal, setFailureModal] = useState<{show: boolean, s: number, chainage: number, line: string}>({show: false, s: 0, chainage: 0, line: ''});
+    const [failureDuration, setFailureDuration] = useState(5);
     const trackInfoRef = useRef({ startX: 0, widthPx: 0 });
 
     useEffect(() => {
@@ -208,40 +209,27 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
 
             const trackIdBase = Math.floor(ch/100) + 1000;
             
-            // Labels T-xxxx
-            ctx.fillStyle = '#444';
-            ctx.font = '7px var(--f-sans)';
-            ctx.textAlign = 'center';
-            ctx.fillText(`T${trackIdBase}1`, rx + 15, cy - 9); // DN Track
-            ctx.fillText(`T${trackIdBase}2`, rx + 15, cy + 8); // UP Track
-
             // Dynamic Signal Interlocking Aspect Calculation
             let dnAspect = '#00ff00';
             let upAspect = '#00ff00';
             
             for (const t of trains) {
                 const dnDiff = (t.position - ch + LOOP_LENGTH) % LOOP_LENGTH;
-                if (t.position <= MAX_CHAINAGE && dnDiff > 0 && dnDiff < BLOCK_SIZE) {
-                    dnAspect = '#ff0000';
-                }
+                if (t.position <= MAX_CHAINAGE && dnDiff > 0 && dnDiff < BLOCK_SIZE) dnAspect = '#ff0000';
                 
                 const upSEQ = 71560 + (71560 - ch);
                 const upDiff = (t.position - upSEQ + LOOP_LENGTH) % LOOP_LENGTH;
-                if (t.position > MAX_CHAINAGE && upDiff > 0 && upDiff < BLOCK_SIZE) {
-                    upAspect = '#ff0000';
-                }
+                if (t.position > MAX_CHAINAGE && upDiff > 0 && upDiff < BLOCK_SIZE) upAspect = '#ff0000';
             }
 
             // DN Signal (above track)
             ctx.strokeStyle = '#666'; ctx.lineWidth = 1; ctx.setLineDash([]);
             ctx.beginPath(); ctx.moveTo(rx, cy - 19); ctx.lineTo(rx, cy - 25); ctx.stroke();
             ctx.fillStyle = dnAspect; ctx.beginPath(); ctx.arc(rx, cy - 25, 2.5, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#222'; ctx.fillText(`S${trackIdBase}3`, rx, cy - 29);
 
             // UP Signal (below track)
             ctx.beginPath(); ctx.moveTo(rx, cy + 18); ctx.lineTo(rx, cy + 24); ctx.stroke();
             ctx.fillStyle = upAspect; ctx.beginPath(); ctx.arc(rx, cy + 24, 2.5, 0, Math.PI*2); ctx.fill();
-            ctx.fillStyle = '#222'; ctx.fillText(`S${trackIdBase}4`, rx, cy + 32);
         }
 
         // 6. Draw MAs and Trains
