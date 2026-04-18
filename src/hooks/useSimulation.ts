@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, MutableRefObject } from 'react';
 import { Train, ZoneController, ATPModule } from '../lib/simulator';
+import type { LogEntry } from '../lib/exportReport';
 
 export const LOOP_LENGTH = 15507.084; // Exact structural loop derived
 
@@ -86,6 +87,18 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
 
     const zc = useRef(new ZoneController(200));
     const atp = useRef(new ATPModule(1.0)); // Adjusted to 1.0 m/s^2 later in code? wait ATPModule handles it
+
+    // --- Logging ---
+    const logRef = useRef<LogEntry[]>([]);
+    const lastLogClockRef = useRef<number>(6 * 3600); // track last logged sim time
+    const LOG_INTERVAL_SEC = 30; // log every 30 sim-seconds
+
+    const formatSimTime = (sec: number) => {
+        const h = Math.floor(sec / 3600).toString().padStart(2, '0');
+        const m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
+        const s = Math.floor(sec % 60).toString().padStart(2, '0');
+        return `${h}:${m}:${s}`;
+    };
 
     const simState = useRef<{ trains: Train[], mas: Record<string, number>, clockTime: number, timetable: any[], failures: {id: string, s: number, timer: number}[] }>({
         trains: [],
@@ -181,6 +194,8 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
         simState.current.clockTime = 6 * 3600; // Reset to 6:00 AM
         simState.current.trains = [];
         simState.current.mas = {};
+        logRef.current = []; // Clear log on reset
+        lastLogClockRef.current = 6 * 3600;
         
         spawnTrainsBasedOnTimetable();
         
@@ -300,6 +315,31 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
                     });
 
                     simState.current.mas = newMas;
+
+                    // --- Record log entry every LOG_INTERVAL_SEC sim-seconds ---
+                    const clock = simState.current.clockTime;
+                    if (clock - lastLogClockRef.current >= LOG_INTERVAL_SEC) {
+                        lastLogClockRef.current = clock;
+                        simState.current.trains.forEach(train => {
+                            const pos = getPosFromS(train.position);
+                            logRef.current.push({
+                                simTime: formatSimTime(clock),
+                                trainId: train.id,
+                                line: pos.line,
+                                chainage: pos.chainage,
+                                positionM: train.position,
+                                speedKmh: train.speed * 3.6,
+                                accelMs2: train.acceleration,
+                                targetSpeedKmh: train.targetSpeed * 3.6,
+                                advisorySpeedKmh: train.advisorySpeed * 3.6,
+                                mode: train.mode,
+                                emergencyBrake: train.emergencyBrake ? 'YES' : 'NO',
+                                maDistM: newMas[train.id] ?? 0,
+                                dwellTimer: train.dwellTimer,
+                            });
+                        });
+                    }
+
                     accumulatorRef.current -= cycleTime;
                 }
                 forceUpdate({});
@@ -313,6 +353,12 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
         };
     }, [paused]);
 
+    const getLog = useCallback(() => logRef.current, []);
+    const clearLog = useCallback(() => {
+        logRef.current = [];
+        lastLogClockRef.current = simState.current.clockTime;
+    }, []);
+
     return { 
         paused, 
         setPaused, 
@@ -322,6 +368,8 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
         mas: simState.current.mas, 
         clockTime: simState.current.clockTime,
         failures: simState.current.failures,
-        addFailure
+        addFailure,
+        getLog,
+        clearLog
     };
 }
