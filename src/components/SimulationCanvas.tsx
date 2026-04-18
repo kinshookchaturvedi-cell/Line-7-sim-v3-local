@@ -123,7 +123,8 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
             const x = getPhysicalX(st.c);
             const cy = getCyForRow(rowIndex);
 
-            const stationWidthPx = (80 / MAX_CHAINAGE) * trackWidthPx * NUM_ROWS;
+            const platformLength = st.name === "Ashram" ? 135 : 140;
+            const stationWidthPx = (platformLength / MAX_CHAINAGE) * trackWidthPx * NUM_ROWS;
             const shortName = shortNames[st.name] || st.name;
 
             // Draw Station Marker

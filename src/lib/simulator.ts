@@ -104,7 +104,7 @@ export class Train {
     runDistance: number = 0; // Distance traveled since last stop
     coastDistance: number = 0; // Distance coasted since last stop
 
-    constructor(id: string, position: number, speed: number, color: string, length: number = 70) {
+    constructor(id: string, position: number, speed: number, color: string, length: number = 132.3) {
         this.id = id;
         this.position = position;
         this.speed = speed;

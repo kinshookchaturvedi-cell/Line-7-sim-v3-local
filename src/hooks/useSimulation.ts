@@ -198,7 +198,7 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
                 const cols = ['#e91e63', '#ec407a', '#f48fb1', '#c2185b', '#f06292', '#ad1457'];
                 for (let i = 0; i < 42; i++) {
                     const pos = i * spacing;
-                    const t = new Train(`T${i+1}`, pos, 0, cols[i % cols.length], 70);
+                    const t = new Train(`T${i+1}`, pos, 0, cols[i % cols.length], 132.3);
                     let minDiff = Infinity;
                     let nStop = STOPS[0];
                     for (const stop of STOPS) {
