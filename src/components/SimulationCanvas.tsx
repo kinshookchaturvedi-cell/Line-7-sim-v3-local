@@ -14,8 +14,7 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
     const [isSimulatingFailure, setIsSimulatingFailure] = useState(false);
     const [hoverData, setHoverData] = useState<{x: number, y: number, chainage: number, line: string, s: number} | null>(null);
     const [failureModal, setFailureModal] = useState<{show: boolean, s: number, chainage: number, line: string}>({show: false, s: 0, chainage: 0, line: ''});
-    const [failureDuration, setFailureDuration] = useState(5);
-    const trackInfoRef = useRef({ startX: 0, widthPx: 0, topY: 0, bottomY: 0 });
+    const trackInfoRef = useRef({ startX: 0, widthPx: 0 });
 
     useEffect(() => {
         const canvas = canvasRef.current;
@@ -30,234 +29,260 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
         const width = canvas.width;
         const height = canvas.height;
 
-        ctx.clearRect(0, 0, width, height);
+        // Ebiscreen background color
+        ctx.fillStyle = '#c4c6c6';
+        ctx.fillRect(0, 0, width, height);
 
-        const trackYTop = height / 2 - 20;
-        const trackYBottom = height / 2 + 20;
         const trackStartX = width * 0.05;
         const trackEndX = width * 0.95;
         const trackWidthPx = trackEndX - trackStartX;
         
-        trackInfoRef.current = { startX: trackStartX, widthPx: trackWidthPx, topY: trackYTop, bottomY: trackYBottom };
+        trackInfoRef.current = { startX: trackStartX, widthPx: trackWidthPx };
+
+        const NUM_ROWS = 3;
+        const MAX_CHAINAGE = 71560; // 71.56km
+        const rowWidth = MAX_CHAINAGE / NUM_ROWS;
+        const rowHeight = height / NUM_ROWS;
 
         const getXY = (pos: number) => {
             const mapped = getPosFromS(pos);
             const { chainage, line } = mapped;
             
-            const physicalX = trackStartX + (chainage / 8420) * trackWidthPx;
+            const rowIndex = Math.min(NUM_ROWS - 1, Math.floor(chainage / rowWidth));
+            const progressInRow = (chainage - rowIndex * rowWidth) / rowWidth;
             
+            const isLeftToRight = rowIndex % 2 === 0;
+            const xProgress = isLeftToRight ? progressInRow : (1 - progressInRow);
+            
+            const physicalX = trackStartX + xProgress * trackWidthPx;
+            
+            const cy = rowHeight * rowIndex + rowHeight / 2;
             let isTop = true;
-            let y = trackYTop;
+            let y = cy - 20;
             
             if (line === 'DN') {
                 isTop = true;
-                y = trackYTop;
+                y = cy - 15;
             } else if (line === 'UP') {
                 isTop = false;
-                y = trackYBottom;
-            } else if (line === 'CROSS_DN_UP_FWD') {
-                const progress = (chainage - 8100) / 80;
-                y = trackYTop + progress * (trackYBottom - trackYTop);
-                isTop = progress < 0.5;
-            } else if (line === 'CROSS_UP_DN_REV') {
-                const progress = (1095 - chainage) / 80;
-                y = trackYBottom - progress * (trackYBottom - trackYTop);
-                isTop = progress > 0.5;
-            }
+                y = cy + 15;
+            } 
             
             return { x: physicalX, y, isTop };
         };
 
-        const getPhysicalX = (chainage: number) => trackStartX + (chainage / 8420) * trackWidthPx;
-
-        const getSignalAspect = (signalPos: number) => {
-            let aspect = '#2ECC71';
-            for (const train of trains) {
-                const distFront = (train.position - signalPos + LOOP_LENGTH) % LOOP_LENGTH;
-                if (distFront >= 0 && distFront <= 500 + train.length) {
-                    return '#E74C3C';
-                }
-            }
-            return aspect;
+        const getPhysicalX = (chainage: number) => {
+            const rowIndex = Math.min(NUM_ROWS - 1, Math.floor(chainage / rowWidth));
+            const progressInRow = (chainage - rowIndex * rowWidth) / rowWidth;
+            const isLeftToRight = rowIndex % 2 === 0;
+            const xProgress = isLeftToRight ? progressInRow : (1 - progressInRow);
+            return trackStartX + xProgress * trackWidthPx;
         };
 
-        const drawSignalAt = (pos: number) => {
-            const { x, y, isTop } = getXY(pos);
-            const aspect = getSignalAspect(pos);
+        const getCyForRow = (rowIndex: number) => rowHeight * rowIndex + rowHeight / 2;
+
+        // Drawing Tracks (Ebiscreen style: top thick yellow, bottom thick green)
+        for (let i = 0; i < NUM_ROWS; i++) {
+            const cy = getCyForRow(i);
             
-            ctx.fillStyle = aspect;
-            ctx.beginPath();
-            const yOffset = isTop ? -12 : 12; 
-            ctx.arc(x, y + yOffset, 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 1;
-            ctx.stroke();
+            // DN Track - Yellow
+            ctx.fillStyle = '#ffeb3b';
+            ctx.fillRect(trackStartX, cy - 18, trackWidthPx, 4);
             
-            ctx.strokeStyle = '#888';
-            ctx.beginPath();
-            ctx.moveTo(x, y + yOffset + (isTop ? 4 : -4));
-            ctx.lineTo(x, y + (isTop ? -2 : 2));
-            ctx.stroke();
-        };
+            // UP Track - Green
+            ctx.fillStyle = '#00e676';
+            ctx.fillRect(trackStartX, cy + 13, trackWidthPx, 4);
 
-        const drawCrossoverAtPhysical = (x: number) => {
-            const cw = 40; 
-            ctx.strokeStyle = '#666';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(x - cw/2, trackYTop);
-            ctx.lineTo(x + cw/2, trackYBottom);
-            ctx.moveTo(x + cw/2, trackYTop);
-            ctx.lineTo(x - cw/2, trackYBottom);
-            ctx.stroke();
+            // Row Labels
+            ctx.fillStyle = '#555';
+            ctx.font = 'bold 9px var(--f-sans)';
+            ctx.textAlign = 'center';
             
-            ctx.fillStyle = '#F39C12'; // Orange/Yellow
-            const pmSize = 6;
-            ctx.fillRect(x - cw/2 - pmSize/2, trackYTop - pmSize/2, pmSize, pmSize);
-            ctx.fillRect(x + cw/2 - pmSize/2, trackYTop - pmSize/2, pmSize, pmSize);
-            ctx.fillRect(x - cw/2 - pmSize/2, trackYBottom - pmSize/2, pmSize, pmSize);
-            ctx.fillRect(x + cw/2 - pmSize/2, trackYBottom - pmSize/2, pmSize, pmSize);
-        };
-        
-        const drawScissorCrossoverAtLogical = (startPos: number, endPos: number) => {
-            const startX = getPhysicalX(startPos);
-            const endX = getPhysicalX(endPos);
-            
-            ctx.strokeStyle = '#666';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(startX, trackYTop);
-            ctx.lineTo(endX, trackYBottom);
-            ctx.moveTo(endX, trackYTop);
-            ctx.lineTo(startX, trackYBottom);
-            ctx.stroke();
-            
-            ctx.fillStyle = '#F39C12'; // Orange/Yellow
-            const pmSize = 6;
-            ctx.fillRect(startX - pmSize/2, trackYTop - pmSize/2, pmSize, pmSize);
-            ctx.fillRect(endX - pmSize/2, trackYTop - pmSize/2, pmSize, pmSize);
-            ctx.fillRect(startX - pmSize/2, trackYBottom - pmSize/2, pmSize, pmSize);
-            ctx.fillRect(endX - pmSize/2, trackYBottom - pmSize/2, pmSize, pmSize);
-        };
+            const dirLabel = i % 2 === 0 ? "→" : "←";
+            const dirLabelUp = i % 2 === 0 ? "←" : "→";
 
-        // 1. Draw Tracks
-        ctx.fillStyle = '#ccc';
-        ctx.fillRect(trackStartX, trackYTop - 1, trackWidthPx, 2);
-        ctx.fillRect(trackStartX, trackYBottom - 1, trackWidthPx, 2);
+            ctx.fillText(`DN Line ${dirLabel}`, trackStartX + trackWidthPx / 2, cy - 28);
+            ctx.fillText(`${dirLabelUp} UP Line`, trackStartX + trackWidthPx / 2, cy + 32);
+        }
 
-        // Draw Line Labels
-        ctx.fillStyle = '#666';
-        ctx.font = 'bold 14px var(--f-sans)';
-        ctx.textAlign = 'center';
-        ctx.fillText("DN Line \u2192", trackStartX + trackWidthPx / 2, trackYTop - 40); // User asked to swap labels
-        ctx.fillText("\u2190 UP Line", trackStartX + trackWidthPx / 2, trackYBottom + 50);
+        // Draw curved connections mimicking track continuation
+        ctx.strokeStyle = '#aaaaaa';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(trackEndX, (getCyForRow(0) + getCyForRow(1))/2 - 1, (getCyForRow(1) - getCyForRow(0))/2, -Math.PI/2, Math.PI/2);
+        ctx.stroke();
 
-        // 3. Draw Crossovers
-        drawScissorCrossoverAtLogical(1015, 1095); // UP to DN 1055
-        drawScissorCrossoverAtLogical(4460, 4540); // Mid requested
-        drawScissorCrossoverAtLogical(8100, 8180); // DN to UP 8140
+        ctx.beginPath();
+        ctx.arc(trackStartX, (getCyForRow(1) + getCyForRow(2))/2 - 1, (getCyForRow(2) - getCyForRow(1))/2, Math.PI/2, Math.PI * 1.5);
+        ctx.stroke();
 
-        // 4. Draw Crossover Signals (Protecting point machines)
-        const drawSignalAtPhysical = (chainage: number, y: number, isTop: boolean) => {
-            const x = getPhysicalX(chainage);
-            ctx.fillStyle = '#2ECC71'; // Normally Green
-            ctx.beginPath();
-            const yOffset = isTop ? -12 : 12; 
-            ctx.arc(x, y + yOffset, 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-            
-            ctx.strokeStyle = '#888';
-            ctx.beginPath();
-            ctx.moveTo(x, y + yOffset + (isTop ? 4 : -4));
-            ctx.lineTo(x, y + (isTop ? -2 : 2));
-            ctx.stroke();
-        };
-
-        // DN moving right
-        drawSignalAtPhysical(1005, trackYTop, true);
-        drawSignalAtPhysical(4450, trackYTop, true);
-        drawSignalAtPhysical(8090, trackYTop, true);
-        
-        // UP moving left
-        drawSignalAtPhysical(1105, trackYBottom, false);
-        drawSignalAtPhysical(4550, trackYBottom, false);
-        drawSignalAtPhysical(8190, trackYBottom, false);
-
-        // 5. Draw Stations (no signals here)
+        // 5. Draw Stations (Ebiscreen white rect with black text border above tracks)
         chainages.forEach((st) => {
+            const rowIndex = Math.min(NUM_ROWS - 1, Math.floor(st.c / rowWidth));
             const x = getPhysicalX(st.c);
-            const stationWidthPx = (74 / 8420) * trackWidthPx;
+            const cy = getCyForRow(rowIndex);
+
+            const stationWidthPx = (80 / MAX_CHAINAGE) * trackWidthPx * NUM_ROWS;
             const shortName = shortNames[st.name] || st.name;
 
-            // DN platform
-            ctx.fillStyle = '#bbb';
-            ctx.fillRect(x - stationWidthPx / 2, trackYTop - 6, stationWidthPx, 12);
-            ctx.fillStyle = '#555';
-            ctx.font = '10px var(--f-sans)';
+            // Draw Station Marker
+            ctx.fillStyle = '#e8e8e8'; 
+            ctx.fillRect(x - stationWidthPx/2, cy - 42, stationWidthPx, 14);
+            ctx.strokeStyle = '#888';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x - stationWidthPx/2, cy - 42, stationWidthPx, 14);
+
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 9px var(--f-sans)';
             ctx.textAlign = 'center';
-            ctx.fillText(shortName + " DN", x, trackYTop - 15);
+            ctx.fillText(shortName, x, cy - 32);
             
-            // UP platform
-            ctx.fillStyle = '#bbb';
-            ctx.fillRect(x - stationWidthPx / 2, trackYBottom - 6, stationWidthPx, 12);
-            ctx.fillStyle = '#555';
-            ctx.fillText(shortName + " UP", x, trackYBottom + 22);
+            // Connect to tracks
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([2, 2]);
+            ctx.beginPath();
+            ctx.moveTo(x, cy - 28);
+            ctx.lineTo(x, cy + 13);
+            ctx.stroke();
+            ctx.setLineDash([]);
         });
 
+        // Loop End/Start Crossovers (Scissors at Maujpur, Doubles at ends)
+        const drawCrossover = (ch: number, type: 'SCISSORS' | 'DOUBLE' | 'SINGLE') => {
+            const x = getPhysicalX(ch);
+            const rowIndex = Math.min(NUM_ROWS - 1, Math.floor(ch / rowWidth));
+            const cy = getCyForRow(rowIndex);
+            
+            const cw = type === 'SCISSORS' ? 12 : 8; 
+            ctx.strokeStyle = '#ffeb3b'; // Yellow crossovers
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.moveTo(x - cw, cy - 16);
+            ctx.lineTo(x + cw, cy + 15);
+            if (type !== 'SINGLE') {
+                ctx.moveTo(x + cw, cy - 16);
+                ctx.lineTo(x - cw, cy + 15);
+            }
+            if (type === 'DOUBLE') {
+                ctx.moveTo(x - cw - 15, cy - 16);
+                ctx.lineTo(x + cw - 15, cy + 15);
+                ctx.moveTo(x + cw - 15, cy - 16);
+                ctx.lineTo(x - cw - 15, cy + 15);
+            }
+            ctx.stroke();
+
+            // Interlocking Point Machine Markers [P-XXXX]
+            ctx.fillStyle = '#666';
+            ctx.fillRect(x - 3, cy - 3, 6, 6);
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 7px var(--f-sans)';
+            ctx.textAlign = 'center';
+            const pId = 'P' + (Math.floor(ch/100) + 200).toString().padStart(4, '0');
+            ctx.fillText(pId, x, cy + 8);
+        };
+
+        drawCrossover(120, 'DOUBLE'); // Majlis
+        drawCrossover(4380, 'SINGLE'); // NSP
+        drawCrossover(5350, 'DOUBLE'); // Shakurpur
+        drawCrossover(16620, 'SINGLE'); // South Campus
+        drawCrossover(23740, 'SINGLE'); // Lajpat Nagar
+        drawCrossover(31520, 'DOUBLE'); // Shree Ram Mandir
+        drawCrossover(34650, 'DOUBLE'); // IP Ext
+        drawCrossover(42280, 'SCISSORS'); // Maujpur junction
+        drawCrossover(47160, 'SINGLE'); // Sonia Vihar
+        drawCrossover(50340, 'SINGLE'); // Jagatpur
+        drawCrossover(45460, 'SCISSORS'); // Shiv Vihar End
+
+        // 5.5 Procedural EbiScreen Layout (Blocks & Signals)
+        const BLOCK_SIZE = 800; // Generate simulated blocks every 800m
+        for (let ch = 0; ch < MAX_CHAINAGE; ch += BLOCK_SIZE) {
+            const rx = getPhysicalX(ch);
+            const rowIndex = Math.min(NUM_ROWS - 1, Math.floor(ch / rowWidth));
+            const cy = getCyForRow(rowIndex);
+
+            // Grey Structural Cuts separating the yellow/green thick lines
+            ctx.fillStyle = '#999';
+            ctx.fillRect(rx - 1, cy - 19, 2, 6); // DN Separator
+            ctx.fillRect(rx - 1, cy + 12, 2, 6); // UP Separator
+
+            const trackIdBase = Math.floor(ch/100) + 1000;
+            
+            // Labels T-xxxx
+            ctx.fillStyle = '#444';
+            ctx.font = '7px var(--f-sans)';
+            ctx.textAlign = 'center';
+            ctx.fillText(`T${trackIdBase}1`, rx + 15, cy - 9); // DN Track
+            ctx.fillText(`T${trackIdBase}2`, rx + 15, cy + 8); // UP Track
+
+            // Dynamic Signal Interlocking Aspect Calculation
+            let dnAspect = '#00ff00';
+            let upAspect = '#00ff00';
+            
+            for (const t of trains) {
+                const dnDiff = (t.position - ch + LOOP_LENGTH) % LOOP_LENGTH;
+                if (t.position <= MAX_CHAINAGE && dnDiff > 0 && dnDiff < BLOCK_SIZE) {
+                    dnAspect = '#ff0000';
+                }
+                
+                const upSEQ = 71560 + (71560 - ch);
+                const upDiff = (t.position - upSEQ + LOOP_LENGTH) % LOOP_LENGTH;
+                if (t.position > MAX_CHAINAGE && upDiff > 0 && upDiff < BLOCK_SIZE) {
+                    upAspect = '#ff0000';
+                }
+            }
+
+            // DN Signal (above track)
+            ctx.strokeStyle = '#666'; ctx.lineWidth = 1; ctx.setLineDash([]);
+            ctx.beginPath(); ctx.moveTo(rx, cy - 19); ctx.lineTo(rx, cy - 25); ctx.stroke();
+            ctx.fillStyle = dnAspect; ctx.beginPath(); ctx.arc(rx, cy - 25, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#222'; ctx.fillText(`S${trackIdBase}3`, rx, cy - 29);
+
+            // UP Signal (below track)
+            ctx.beginPath(); ctx.moveTo(rx, cy + 18); ctx.lineTo(rx, cy + 24); ctx.stroke();
+            ctx.fillStyle = upAspect; ctx.beginPath(); ctx.arc(rx, cy + 24, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#222'; ctx.fillText(`S${trackIdBase}4`, rx, cy + 32);
+        }
+
         // 6. Draw MAs and Trains
-        trains.forEach((train, index) => {
+        trains.forEach((train) => {
             const { x, y, isTop } = getXY(train.position);
 
             const maDist = mas[train.id];
-            if (maDist !== undefined) {
-                ctx.strokeStyle = train.color;
-                ctx.globalAlpha = 0.6;
-                ctx.lineWidth = 3;
+            if (maDist !== undefined && maDist > 0) {
+                ctx.strokeStyle = '#00aaff'; // Light blue MA line
+                ctx.globalAlpha = 0.5;
+                ctx.lineWidth = 6;
                 ctx.beginPath();
                 
                 const numMaSegments = Math.ceil(maDist / 50);
                 for (let i = 0; i <= numMaSegments; i++) {
                     const p = (train.position + Math.min(i * 50, maDist)) % LOOP_LENGTH;
                     const { x: px, y: py, isTop: pIsTop } = getXY(p);
-                    const yOffset = pIsTop ? -16 : 16;
+                    const yOffset = pIsTop ? -20 : 20;
                     if (i === 0) ctx.moveTo(px, py + yOffset);
                     else ctx.lineTo(px, py + yOffset);
                 }
                 ctx.stroke();
-
-                // Draw LMA (Limit of Movement Authority) Tick mark
-                const limitPos = (train.position + maDist) % LOOP_LENGTH;
-                const { x: lx, y: ly, isTop: lIsTop } = getXY(limitPos);
-                const lYOffset = lIsTop ? -16 : 16;
-                ctx.beginPath();
-                ctx.moveTo(lx, ly + lYOffset - 6);
-                ctx.lineTo(lx, ly + lYOffset + 6);
-                ctx.lineWidth = 4;
-                ctx.stroke();
-                
                 ctx.globalAlpha = 1.0;
             }
 
-            // Train Body
-            ctx.strokeStyle = train.color;
-            ctx.lineWidth = 14;
-            ctx.lineCap = 'round';
+            // Train Body (Red thick block)
+            ctx.strokeStyle = '#f00';
+            ctx.lineWidth = 6;
+            ctx.lineCap = 'butt';
             ctx.beginPath();
             
-            const trainLengthPx = (train.length / 8420) * trackWidthPx;
+            const trainLengthPx = (train.length / MAX_CHAINAGE) * trackWidthPx * NUM_ROWS;
             let currentLogicalPos = train.position;
             let { x: currentX, y: currentY } = getXY(currentLogicalPos);
             ctx.moveTo(currentX, currentY);
 
             let accumulatedPx = 0;
-            const stepLogical = 2; // 2 meters step for smooth bending
+            const stepLogical = 5;
             let steps = 0;
             
-            while (accumulatedPx < trainLengthPx && steps < 200) {
+            while (accumulatedPx < trainLengthPx && steps < 50) {
                 const nextLogicalPos = (currentLogicalPos - stepLogical + LOOP_LENGTH) % LOOP_LENGTH;
                 const { x: nextX, y: nextY } = getXY(nextLogicalPos);
                 const dist = Math.hypot(nextX - currentX, nextY - currentY);
@@ -265,9 +290,7 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
                 if (dist > 0) {
                     if (accumulatedPx + dist > trainLengthPx) {
                         const ratio = (trainLengthPx - accumulatedPx) / dist;
-                        const finalX = currentX + (nextX - currentX) * ratio;
-                        const finalY = currentY + (nextY - currentY) * ratio;
-                        ctx.lineTo(finalX, finalY);
+                        ctx.lineTo(currentX + (nextX - currentX) * ratio, currentY + (nextY - currentY) * ratio);
                         break;
                     } else {
                         ctx.lineTo(nextX, nextY);
@@ -281,17 +304,24 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
             }
             ctx.stroke();
             
-            // Train ID - drawn with text over the train
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 10px var(--f-sans)';
+            // Train ID - Ebiscreen style Black Box with Green Text
+            const tagX = x + (isTop ? -10 : 10);
+            const tagY = y + (isTop ? -15 : 15);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(tagX - 12, tagY - 6, 24, 12);
+            ctx.strokeStyle = '#0f0';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(tagX - 12, tagY - 6, 24, 12);
+            
+            ctx.fillStyle = '#0f0';
+            ctx.font = 'bold 8px Courier New';
             ctx.textAlign = 'center';
-            ctx.fillText(train.id, x + (isTop ? 10 : -10), y + 3);
+            ctx.fillText(train.id.replace('T',''), tagX, tagY + 3);
 
-            // Emergency Brake Indicator
             if (train.emergencyBrake) {
                 ctx.fillStyle = '#E74C3C';
                 ctx.beginPath();
-                ctx.arc(x, y - 15, 4, 0, Math.PI * 2);
+                ctx.arc(x, y - 8, 3, 0, Math.PI * 2);
                 ctx.fill();
             }
         });
@@ -300,21 +330,19 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
         failures.forEach(f => {
             const { x, y } = getXY(f.s);
             ctx.fillStyle = '#E74C3C';
-            // Draw a red solid cross
             ctx.beginPath();
-            ctx.moveTo(x - 6, y - 6);
-            ctx.lineTo(x + 6, y + 6);
-            ctx.moveTo(x + 6, y - 6);
-            ctx.lineTo(x - 6, y + 6);
+            ctx.moveTo(x - 5, y - 5);
+            ctx.lineTo(x + 5, y + 5);
+            ctx.moveTo(x + 5, y - 5);
+            ctx.lineTo(x - 5, y + 5);
             ctx.strokeStyle = '#E74C3C';
-            ctx.lineWidth = 4;
+            ctx.lineWidth = 3;
             ctx.stroke();
             
-            // Text for failure duration
             ctx.fillStyle = '#E74C3C';
-            ctx.font = 'bold 9px var(--f-sans)';
+            ctx.font = 'bold 8px var(--f-sans)';
             ctx.textAlign = 'center';
-            ctx.fillText(`FAIL ${Math.ceil(f.timer / 60)}m`, x, y - 10);
+            ctx.fillText(`FAIL ${Math.ceil(f.timer / 60)}m`, x, y - 8);
         });
 
     }, [trains, mas, failures]);
@@ -326,20 +354,31 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
         const x = e.clientX - rect.left;
         const y = e.clientY - rect.top;
 
-        const { startX, widthPx, topY, bottomY } = trackInfoRef.current;
+        const { startX, widthPx } = trackInfoRef.current;
+        const MAX_CHAINAGE = 71560;
+        const NUM_ROWS = 3;
+        const rowHeight = rect.height / NUM_ROWS;
+        const rowWidth = MAX_CHAINAGE / NUM_ROWS;
+        
+        let rowIndex = Math.floor(y / rowHeight);
+        rowIndex = Math.max(0, Math.min(NUM_ROWS - 1, rowIndex));
+        
+        const cy = rowHeight * rowIndex + rowHeight / 2;
         const normalizedX = Math.max(0, Math.min(x - startX, widthPx));
-        let chainageEstimate = (normalizedX / widthPx) * 8420;
+        
+        const isLeftToRight = rowIndex % 2 === 0;
+        const xProgress = isLeftToRight ? (normalizedX / widthPx) : (1 - (normalizedX / widthPx));
+        
+        let chainageEstimate = rowIndex * rowWidth + xProgress * rowWidth;
         
         let line = 'DN';
         let direction: 1 | -1 = 1;
-        if (Math.abs(y - topY) < Math.abs(y - bottomY)) {
+        if (y < cy) {
             line = 'DN';
             direction = 1;
-            chainageEstimate = Math.max(1095, Math.min(chainageEstimate, 8253.542));
         } else {
             line = 'UP';
             direction = -1;
-            chainageEstimate = Math.max(500, Math.min(chainageEstimate, 8100));
         }
 
         const s = getSFromChainage(chainageEstimate, line as 'DN'|'UP', direction);
@@ -354,14 +393,14 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
     };
 
     return (
-        <div className="relative w-full h-full bg-white rounded-lg overflow-hidden border border-gray-200 shadow-sm">
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 text-gray-300 text-2xl font-bold uppercase tracking-widest pointer-events-none">
-                DMRC Line 11
+        <div className="relative w-full h-full bg-[#c4c6c6] rounded-lg overflow-hidden border shadow-inner">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[#888] text-xl font-bold uppercase tracking-widest pointer-events-none opacity-50">
+                EbiScreen Client - L7 Overview
             </div>
 
             <button 
                 onClick={() => setIsSimulatingFailure(!isSimulatingFailure)}
-                className={`absolute top-4 right-4 z-10 px-4 py-2 rounded font-bold text-xs uppercase tracking-wider transition-colors ${isSimulatingFailure ? 'bg-red-600 text-white shadow-inner flex items-center gap-2' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 shadow'}`}
+                className={`absolute top-4 right-4 z-10 px-4 py-2 rounded font-bold text-xs uppercase tracking-wider transition-colors ${isSimulatingFailure ? 'bg-red-600 text-white shadow-inner flex items-center gap-2' : 'bg-[#e5e5e5] text-[#333] border border-gray-400 hover:bg-gray-200 shadow'}`}
             >
                 {isSimulatingFailure ? (
                     <>
@@ -382,39 +421,36 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
 
             {hoverData && isSimulatingFailure && (
                 <div 
-                    className="absolute bg-black text-white text-xs font-mono px-2 py-1 rounded pointer-events-none shadow-lg z-20 whitespace-nowrap transform -translate-x-1/2 -translate-y-full"
+                    className="absolute bg-[#e8e8e8] border border-gray-500 text-black text-xs font-mono px-2 py-1 rounded pointer-events-none shadow-lg z-20 whitespace-nowrap transform -translate-x-1/2 -translate-y-full"
                     style={{ left: hoverData.x, top: hoverData.y - 15 }}
                 >
-                    {hoverData.line} LINE - CH: {hoverData.chainage.toFixed(1)}m<br/>
-                    <span className="text-gray-400 text-[10px]">Click to set failure</span>
+                    {hoverData.line} - CH {hoverData.chainage.toFixed(0)}
                 </div>
             )}
 
             {failureModal.show && (
-                <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-xl shadow-2xl p-6 w-[350px]">
-                        <h3 className="text-lg font-bold text-gray-900 mb-2 mt-0">Confirm Point Failure</h3>
-                        <p className="text-sm text-gray-600 mb-4 whitespace-nowrap">
-                            Line: <strong className="text-gray-900">{failureModal.line}</strong><br/>
-                            Chainage: <strong className="text-gray-900">{failureModal.chainage.toFixed(1)}m</strong>
+                <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+                    <div className="bg-[#e8e8e8] border border-gray-400 rounded-sm shadow-2xl p-4 w-[300px]">
+                        <h3 className="text-sm font-bold text-black mb-2 mt-0 uppercase border-b border-gray-300 pb-1">Insert Point Failure</h3>
+                        <p className="text-xs text-black mb-4 whitespace-nowrap font-mono">
+                            Line: <strong>{failureModal.line}</strong> &nbsp; CH: <strong>{failureModal.chainage.toFixed(0)}</strong>
                         </p>
                         
-                        <div className="mb-6">
-                            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">Duration (Minutes)</label>
+                        <div className="mb-4">
+                            <label className="block text-[10px] font-bold text-gray-700 uppercase mb-1">Duration (Min)</label>
                             <input 
                                 type="number" 
-                                min="1" 
-                                max="60" 
+                                min="1" max="60" 
                                 value={failureDuration} 
                                 onChange={e => setFailureDuration(Number(e.target.value))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                className="w-full px-2 py-1 border border-gray-400 bg-white font-mono text-sm focus:outline-none"
                             />
                         </div>
 
-                        <div className="flex justify-end gap-3 font-medium">
+                        <div className="flex justify-end gap-2 font-medium">
                             <button 
                                 onClick={() => setFailureModal({ show: false, s: 0, chainage: 0, line: '' })}
-                                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded transition-colors text-sm"
+                                className="px-3 py-1 bg-[#ccc] border border-gray-400 text-black hover:bg-gray-300 text-[10px] font-bold uppercase transition-colors"
                             >
                                 Cancel
                             </button>
@@ -423,9 +459,9 @@ export const SimulationCanvas: React.FC<Props> = ({ trains, mas, failures, addFa
                                     addFailure(failureModal.s, failureDuration);
                                     setFailureModal({ show: false, s: 0, chainage: 0, line: '' });
                                 }}
-                                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors shadow-sm text-sm"
+                                className="px-3 py-1 bg-gradient-to-b from-red-500 to-red-600 border border-red-800 text-white text-[10px] font-bold uppercase transition-colors shadow-sm"
                             >
-                                Trigger Failure
+                                Trigger
                             </button>
                         </div>
                     </div>

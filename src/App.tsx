@@ -42,7 +42,7 @@ export default function App() {
         ]);
         const wb = xlsx.utils.book_new();
         xlsx.utils.book_append_sheet(wb, ws, "Timetable");
-        xlsx.writeFile(wb, "DMRC_Line11_Timetable.xlsx");
+        xlsx.writeFile(wb, "DMRC_Line7_Timetable.xlsx");
     };
 
     const formatTime = (timeInSec: number) => {
@@ -56,7 +56,7 @@ export default function App() {
         <div className="flex h-screen w-full overflow-hidden" style={{ backgroundColor: 'var(--bg)', fontFamily: 'var(--f-sans)', color: 'var(--ink)' }}>
             <aside className="w-[310px] flex-shrink-0 flex flex-col p-5 border-r overflow-y-auto" style={{ background: 'var(--sidebar-bg)', borderColor: 'var(--line)' }}>
                 <div className="flex justify-between items-center mb-6">
-                    <h1 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em', textTransform: 'uppercase' }}>DMRC Line 11 CBTC Simulator</h1>
+                    <h1 style={{ fontSize: '1.25rem', fontWeight: 700, letterSpacing: '-0.02em', textTransform: 'uppercase' }}>DMRC Line 7 (Pink Line) Simulator</h1>
                     <div className="flex gap-2">
                          <button onClick={initSimulation} className="bg-gray-200 hover:bg-gray-300 text-gray-800 p-1.5 px-3 rounded text-[10px] font-bold uppercase transition-colors">
                             Reset
@@ -87,11 +87,11 @@ export default function App() {
                 </div>
 
                 <div className="mb-4 text-center pb-4 flex flex-col gap-2">
-                     <button onClick={() => fileInputRef.current?.click()} className="bg-blue-600 hover:bg-blue-700 text-white w-full p-2 rounded text-xs font-bold uppercase transition-colors">
+                     <button onClick={() => fileInputRef.current?.click()} className="bg-[#e91e63] hover:bg-[#c2185b] text-white w-full p-2 rounded text-xs font-bold uppercase transition-colors">
                         Upload Timetable (.xlsx)
                     </button>
                     <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".xlsx, .xls" className="hidden" />
-                    <button onClick={handleDownloadSample} className="text-[#3498db] text-[10px] hover:underline uppercase font-bold decoration-[#3498db]">
+                    <button onClick={handleDownloadSample} className="text-[#e91e63] text-[10px] hover:underline uppercase font-bold decoration-[#e91e63]">
                         Download Sample Timetable
                     </button>
                 </div>
@@ -141,7 +141,7 @@ export default function App() {
                         <tbody>
                             {chainages.map((st) => (
                                 <tr key={st.name} className="border-b last:border-0 border-gray-100">
-                                    <td className="py-1 font-mono text-blue-600 font-bold">{shortNames[st.name] || st.name}</td>
+                                    <td className="py-1 font-mono text-pink-600 font-bold">{shortNames[st.name] || st.name}</td>
                                     <td className="py-1 text-gray-800">{st.name}</td>
                                     <td className="py-1 text-right font-mono text-gray-600">{st.c.toFixed(3)}</td>
                                 </tr>
