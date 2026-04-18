@@ -125,8 +125,8 @@ export const DMI: React.FC<DMIProps> = ({ train, maDist, maxMaDist }) => {
                 </div>
 
                 {/* Gauge */}
-                <div style={{ width: 250, height: 210 }} className="relative flex justify-center translate-y-2 transform scale-90 sm:scale-100">
-                    <svg viewBox="0 0 250 250" width="100%" height="100%" style={{ overflow: 'visible' }}>
+                <div style={{ width: 250, height: 260 }} className="relative flex justify-center translate-y-2 transform scale-90 sm:scale-100">
+                    <svg viewBox="0 0 250 290" width="100%" height="100%" style={{ overflow: 'visible' }}>
                         {/* Background Arc */}
                         <path d={backgroundArc} fill="none" stroke="#222" strokeWidth="12" strokeLinecap="round" />
                         
@@ -176,12 +176,14 @@ export const DMI: React.FC<DMIProps> = ({ train, maDist, maxMaDist }) => {
                             ADVISORY
                         </text>
 
-                        {/* DTG Vertical Bar */}
-                        <g transform="translate(5, 35)">
-                            <rect x="0" y="0" width="12" height="130" fill="#333" rx="3" />
-                            <rect x="0" y={130 - (Math.min(maxMaDist, Math.max(0, maDist)) / maxMaDist) * 130} width="12" height={(Math.min(maxMaDist, Math.max(0, maDist)) / maxMaDist) * 130} fill="#2ecc71" rx="3" />
-                            <text x="6" y="145" fill="#666" fontSize="8" textAnchor="middle" fontFamily="monospace">DTG</text>
-                            <text x="6" y="-8" fill="#aaa" fontSize="8" textAnchor="middle" fontFamily="monospace">{maxMaDist}</text>
+                        {/* DTG Horizontal Bar (Re-positioned for visibility) */}
+                        <g transform="translate(25, 260)">
+                            <rect x="0" y="0" width="200" height="12" fill="#333" rx="4" />
+                            {/* Horizontal width dynamically filled based on MA */}
+                            <rect x="0" y="0" width={(Math.min(maxMaDist, Math.max(0, maDist)) / maxMaDist) * 200} height="12" fill="#2ecc71" rx="4" />
+                            <text x="100" y="24" fill="#888" fontSize="10" fontWeight="bold" textAnchor="middle" fontFamily="var(--f-sans)">DISTANCE TO GO (DTG) - {maDist.toFixed(0)}m</text>
+                            <text x="-15" y="10" fill="#aaa" fontSize="9" textAnchor="middle" fontFamily="monospace">0</text>
+                            <text x="215" y="10" fill="#aaa" fontSize="9" textAnchor="middle" fontFamily="monospace">{maxMaDist}</text>
                         </g>
                     </svg>
                 </div>

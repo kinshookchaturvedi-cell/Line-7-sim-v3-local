@@ -139,6 +139,13 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
     const lastLogClockRef = useRef<number>(6 * 3600);
     const LOG_INTERVAL_SEC = 30;
 
+    export interface StationArrival { trainId: string; stationChainage: number; time: number; }
+    export interface TripLog { trainId: string; startTime: number; endTime: number; duration: number; delay: number; }
+
+    const stationArrivalsRef = useRef<StationArrival[]>([]);
+    const tripTrackingRef = useRef<Record<string, { startTime: number, completedTrips: number }>>({});
+    const completedTripsRef = useRef<TripLog[]>([]);
+
     const formatSimTime = (sec: number) => {
         const h = Math.floor(sec / 3600).toString().padStart(2, '0');
         const m = Math.floor((sec % 3600) / 60).toString().padStart(2, '0');
@@ -199,6 +206,12 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
         simState.current.mas = {};
         logRef.current = [];
         lastLogClockRef.current = 6 * 3600;
+        
+        // Reset Telemetry
+        stationArrivalsRef.current = [];
+        completedTripsRef.current = [];
+        tripTrackingRef.current = {};
+
         spawnTrainsBasedOnTimetable();
         setPaused(true);
         accumulatorRef.current = 0;
@@ -248,6 +261,33 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
                             if (distToStop < 0.5 && train.speed < 0.5 && train.dwellTimer <= 0) {
                                 train.speed = 0;
                                 train.dwellTimer = 30;
+
+                                // TELEMETRY: Station Arrival Event
+                                stationArrivalsRef.current.push({
+                                    trainId: train.id,
+                                    stationChainage: train.nextStop,
+                                    time: simState.current.clockTime
+                                });
+
+                                // TELEMETRY: Lap Completion (Chainage 0)
+                                if (train.nextStop === 0) {
+                                    const tracker = tripTrackingRef.current[train.id];
+                                    if (tracker && tracker.startTime > 0) {
+                                        const duration = simState.current.clockTime - tracker.startTime;
+                                        completedTripsRef.current.push({
+                                            trainId: train.id,
+                                            startTime: tracker.startTime,
+                                            endTime: simState.current.clockTime,
+                                            duration: duration,
+                                            delay: Math.max(0, duration - 10140) // 10140s = 169m planned trip
+                                        });
+                                    }
+                                    tripTrackingRef.current[train.id] = { 
+                                        startTime: simState.current.clockTime, 
+                                        completedTrips: (tracker?.completedTrips || 0) + 1 
+                                    };
+                                }
+
                                 const currentStopIdx = STOPS.indexOf(train.nextStop);
                                 train.nextStop = STOPS[(currentStopIdx + 1) % STOPS.length];
                             }
@@ -334,6 +374,11 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
         logRef.current = [];
         lastLogClockRef.current = simState.current.clockTime;
     }, []);
+    const getAnalytics = useCallback(() => ({
+        stationArrivals: stationArrivalsRef.current,
+        completedTrips: completedTripsRef.current,
+        totalTime: Math.max(0, simState.current.clockTime - (6 * 3600))
+    }), []);
 
     return { 
         paused, 
@@ -346,6 +391,7 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
         failures: simState.current.failures,
         addFailure,
         getLog,
-        clearLog
+        clearLog,
+        getAnalytics
     };
 }
