@@ -106,6 +106,9 @@ export const chainages = [
     { name: "Burari", c: 57500 }
 ];
 
+// Initialize default Dwell
+(chainages as any[]).forEach(st => { if (typeof st.dwell === 'undefined') st.dwell = 30; });
+
 export const getPosFromS = (s: number) => {
     s = ((s % LOOP_LENGTH) + LOOP_LENGTH) % LOOP_LENGTH;
     if (s <= 71560) {
@@ -154,13 +157,27 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
         return `${h}:${m}:${s}`;
     };
 
-    const simState = useRef<{ trains: Train[], mas: Record<string, number>, clockTime: number, timetable: any[], failures: {id: string, s: number, timer: number}[] }>({
+    const simState = useRef<{ 
+        trains: Train[], 
+        mas: Record<string, number>, 
+        clockTime: number, 
+        timetable: any[], 
+        failures: {id: string, s: number, timer: number}[],
+        stations: { name: string, c: number, dwell: number }[]
+    }>({
         trains: [],
         mas: {},
         clockTime: 6 * 3600,
         timetable: [],
-        failures: []
+        failures: [],
+        stations: chainages.map(c => ({ ...c, dwell: 30 }))
     });
+
+    const setStationDwell = useCallback((name: string, dwell: number) => {
+        const i = simState.current.stations.findIndex(s => s.name === name);
+        if (i > -1) simState.current.stations[i].dwell = dwell;
+        forceUpdate({});
+    }, []);
 
     const addFailure = useCallback((s: number, durationMins: number) => {
         simState.current.failures.push({
@@ -261,7 +278,9 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
                             }
                             if (distToStop < 0.5 && train.speed < 0.5 && train.dwellTimer <= 0) {
                                 train.speed = 0;
-                                train.dwellTimer = 30;
+                                
+                                const chNode = simState.current.stations.find(c => c.c === train.nextStop || 71560 + (71560 - c.c) === train.nextStop);
+                                train.dwellTimer = chNode?.dwell || 30;
 
                                 // TELEMETRY: Station Arrival Event
                                 stationArrivalsRef.current.push({
@@ -390,7 +409,9 @@ export function useSimulation(simSpeedRef: MutableRefObject<number>) {
         mas: simState.current.mas, 
         clockTime: simState.current.clockTime,
         failures: simState.current.failures,
+        stations: simState.current.stations,
         addFailure,
+        setStationDwell,
         getLog,
         clearLog,
         getAnalytics

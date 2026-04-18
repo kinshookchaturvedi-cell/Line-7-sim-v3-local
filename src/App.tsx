@@ -14,7 +14,9 @@ export default function App() {
         speedRef.current = simSpeed;
     }, [simSpeed]);
 
-    const { paused, setPaused, initSimulation, loadTimetable, trains, mas, clockTime, failures, addFailure, getLog, clearLog } = useSimulation(speedRef);
+    const { paused, setPaused, initSimulation, loadTimetable, trains, mas, clockTime, failures, addFailure, stations, setStationDwell, getLog, clearLog, getAnalytics } = useSimulation(speedRef);
+    const [showExportModal, setShowExportModal] = React.useState(false);
+    const [filters, setFilters] = React.useState({ trainId: '', station: '', startCh: 0, endCh: 71560 });
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,7 +115,7 @@ export default function App() {
                             Export CSV / Excel
                         </button>
                         <button
-                            onClick={() => exportPDF(getLog(), clockTime, trains.map(t => t.id))}
+                            onClick={() => setShowExportModal(true)}
                             className="flex items-center justify-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white w-full p-2 rounded text-[10px] font-bold uppercase transition-colors"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
@@ -135,15 +137,24 @@ export default function App() {
                             <tr className="text-gray-500 border-b">
                                 <th className="pb-1 font-semibold">Short</th>
                                 <th className="pb-1 font-semibold">Long Name</th>
-                                <th className="pb-1 text-right font-semibold">Chainage (m)</th>
+                                <th className="pb-1 text-right font-semibold">Dwell (s)</th>
+                                <th className="pb-1 text-right font-semibold">Chain (m)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {chainages.map((st) => (
+                            {stations.map((st) => (
                                 <tr key={st.name} className="border-b last:border-0 border-gray-100">
                                     <td className="py-1 font-mono text-pink-600 font-bold">{shortNames[st.name] || st.name}</td>
-                                    <td className="py-1 text-gray-800">{st.name}</td>
-                                    <td className="py-1 text-right font-mono text-gray-600">{st.c.toFixed(3)}</td>
+                                    <td className="py-1 text-gray-800 text-[9px]">{st.name}</td>
+                                    <td className="py-1 text-right">
+                                        <input 
+                                            type="number" 
+                                            value={st.dwell} 
+                                            onChange={(e) => setStationDwell(st.name, Number(e.target.value))}
+                                            className="w-10 bg-gray-50 border border-gray-200 text-[10px] text-right px-1 rounded focus:outline-pink-500"
+                                        />
+                                    </td>
+                                    <td className="py-1 text-right font-mono text-gray-600">{st.c.toFixed(0)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -186,6 +197,87 @@ export default function App() {
                     ))}
                 </div>
             </main>
+
+            {/* Export Filter Modal */}
+            {showExportModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-200">
+                        <div className="bg-pink-600 p-4 text-white">
+                            <h2 className="text-sm font-bold uppercase tracking-wider">Advanced Report Export</h2>
+                            <p className="text-[10px] opacity-80 mt-0.5">Filter simulation logs for targeted analytics</p>
+                        </div>
+                        
+                        <div className="p-6 space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Filter by Train</label>
+                                    <select 
+                                        className="w-full bg-gray-50 border border-gray-300 rounded p-2 text-xs"
+                                        value={filters.trainId}
+                                        onChange={e => setFilters({...filters, trainId: e.target.value})}
+                                    >
+                                        <option value="">All Trains</option>
+                                        {trains.map(t => <option key={t.id} value={t.id}>{t.id}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase mb-1">Filter by Station</label>
+                                    <select 
+                                        className="w-full bg-gray-50 border border-gray-300 rounded p-2 text-xs"
+                                        value={filters.station}
+                                        onChange={e => setFilters({...filters, station: e.target.value})}
+                                    >
+                                        <option value="">All Stations</option>
+                                        {stations.map(s => <option key={s.name} value={s.c.toString()}>{shortNames[s.name] || s.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 pt-2">
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase -mb-2">Track Section Selection (m)</label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="relative">
+                                        <span className="absolute left-2 top-2.5 text-[10px] text-gray-400 font-bold">START</span>
+                                        <input 
+                                            type="number" 
+                                            className="w-full bg-gray-50 border border-gray-300 rounded p-2 pl-12 text-xs"
+                                            value={filters.startCh}
+                                            onChange={e => setFilters({...filters, startCh: Number(e.target.value)})}
+                                        />
+                                    </div>
+                                    <div className="relative">
+                                        <span className="absolute left-2 top-2.5 text-[10px] text-gray-400 font-bold">END</span>
+                                        <input 
+                                            type="number" 
+                                            className="w-full bg-gray-50 border border-gray-300 rounded p-2 pl-10 text-xs"
+                                            value={filters.endCh}
+                                            onChange={e => setFilters({...filters, endCh: Number(e.target.value)})}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-50 p-4 border-t border-gray-100 flex justify-end gap-3">
+                            <button 
+                                onClick={() => setShowExportModal(false)}
+                                className="px-4 py-2 text-[10px] font-bold uppercase text-gray-500 hover:text-gray-700 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={() => {
+                                    exportPDF(getLog(), clockTime, trains.map(t => t.id), getAnalytics(), filters);
+                                    setShowExportModal(false);
+                                }}
+                                className="px-6 py-2 bg-pink-600 hover:bg-pink-700 text-white rounded text-[10px] font-bold uppercase shadow-lg shadow-pink-200 transition-all active:scale-95"
+                            >
+                                Generate Report
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
